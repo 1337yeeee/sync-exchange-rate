@@ -6,6 +6,7 @@ import (
 	"fmt"
 	stdhttp "net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -64,6 +65,28 @@ func TestHealthEndpoint(t *testing.T) {
 
 	if got := recorder.Header().Get("Content-Type"); got != "application/json" {
 		t.Fatalf("Content-Type = %q, want application/json", got)
+	}
+}
+
+func TestRootServesFrontend(t *testing.T) {
+	t.Parallel()
+
+	router := newTestRouter(t, &fakeReportService{}, &fakeSyncService{})
+	request := httptest.NewRequest(stdhttp.MethodGet, "/", nil)
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != stdhttp.StatusOK {
+		t.Fatalf("status = %d, want 200", recorder.Code)
+	}
+
+	if got := recorder.Header().Get("Content-Type"); !strings.Contains(got, "text/html") {
+		t.Fatalf("Content-Type = %q, want text/html", got)
+	}
+
+	if !strings.Contains(recorder.Body.String(), "CNB Exchange Rate Sync") {
+		t.Fatalf("unexpected body: %s", recorder.Body.String())
 	}
 }
 

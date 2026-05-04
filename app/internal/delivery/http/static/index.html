@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CNB Exchange Rate Sync</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f5f6f8;
+        --panel: #ffffff;
+        --border: #d7dbe2;
+        --text: #19202a;
+        --muted: #667085;
+        --accent: #0b6bcb;
+        --accent-soft: #e8f1fb;
+        --success: #0f8a5f;
+        --error: #b42318;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Segoe UI", Tahoma, sans-serif;
+        background: linear-gradient(180deg, #eef3f8 0%, #f8fafc 100%);
+        color: var(--text);
+      }
+
+      .page {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 32px 20px 48px;
+      }
+
+      .header {
+        margin-bottom: 24px;
+      }
+
+      .header h1 {
+        margin: 0 0 8px;
+        font-size: 32px;
+        line-height: 1.1;
+      }
+
+      .header p {
+        margin: 0;
+        color: var(--muted);
+        max-width: 760px;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+        gap: 20px;
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        box-shadow: 0 10px 30px rgba(16, 24, 40, 0.06);
+      }
+
+      .panel-body {
+        padding: 18px;
+      }
+
+      .section-title {
+        margin: 0 0 14px;
+        font-size: 16px;
+      }
+
+      .grid {
+        display: grid;
+        gap: 12px;
+      }
+
+      .grid.two {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      label {
+        display: grid;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      input {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        font: inherit;
+        color: var(--text);
+        background: #fff;
+      }
+
+      input:focus {
+        outline: 2px solid rgba(11, 107, 203, 0.15);
+        border-color: var(--accent);
+      }
+
+      .actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 4px;
+      }
+
+      button {
+        border: 0;
+        border-radius: 6px;
+        padding: 10px 14px;
+        font: inherit;
+        cursor: pointer;
+        color: white;
+        background: var(--accent);
+      }
+
+      button.secondary {
+        color: var(--text);
+        background: var(--accent-soft);
+      }
+
+      button:disabled {
+        opacity: 0.65;
+        cursor: wait;
+      }
+
+      .status {
+        min-height: 44px;
+        padding: 12px 14px;
+        border-top: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .status.success {
+        color: var(--success);
+      }
+
+      .status.error {
+        color: var(--error);
+      }
+
+      .result-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+
+      .meta {
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        padding: 11px 12px;
+        border-bottom: 1px solid var(--border);
+        text-align: left;
+        white-space: nowrap;
+      }
+
+      th {
+        font-size: 12px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      td.empty {
+        color: var(--muted);
+      }
+
+      .placeholder {
+        padding: 36px 12px;
+        color: var(--muted);
+        text-align: center;
+      }
+
+      @media (max-width: 900px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="header">
+        <h1>CNB Exchange Rate Sync</h1>
+        <p>
+          Demo interface for synchronizing CNB exchange rates into the database
+          and building normalized rate reports for selected currencies.
+        </p>
+      </div>
+
+      <div class="layout">
+        <section class="panel">
+          <div class="panel-body">
+            <h2 class="section-title">Controls</h2>
+            <div class="grid">
+              <div class="grid two">
+                <label>
+                  Start date
+                  <input id="startDate" type="date" value="2019-07-26" />
+                </label>
+                <label>
+                  End date
+                  <input id="endDate" type="date" value="2019-07-28" />
+                </label>
+              </div>
+
+              <label>
+                Currencies
+                <input
+                  id="currencies"
+                  type="text"
+                  value="EUR,USD,GBP"
+                  placeholder="USD,EUR,GBP"
+                />
+              </label>
+
+              <div class="actions">
+                <button id="syncButton" type="button">Run sync</button>
+                <button id="reportButton" type="button" class="secondary">
+                  Build report
+                </button>
+              </div>
+            </div>
+          </div>
+          <div id="status" class="status">Ready.</div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-body">
+            <div class="result-head">
+              <h2 class="section-title">Report</h2>
+              <div id="reportMeta" class="meta">No report yet.</div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Currency</th>
+                    <th>Min</th>
+                    <th>Max</th>
+                    <th>Avg</th>
+                    <th>Observations</th>
+                  </tr>
+                </thead>
+                <tbody id="reportBody">
+                  <tr>
+                    <td class="placeholder" colspan="5">
+                      Run synchronization and request a report to see data here.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <script>
+      const statusEl = document.getElementById("status");
+      const reportMetaEl = document.getElementById("reportMeta");
+      const reportBodyEl = document.getElementById("reportBody");
+      const syncButton = document.getElementById("syncButton");
+      const reportButton = document.getElementById("reportButton");
+
+      function values() {
+        return {
+          startDate: document.getElementById("startDate").value,
+          endDate: document.getElementById("endDate").value,
+          currencies: document.getElementById("currencies").value,
+        };
+      }
+
+      function setBusy(isBusy) {
+        syncButton.disabled = isBusy;
+        reportButton.disabled = isBusy;
+      }
+
+      function setStatus(message, tone = "") {
+        statusEl.textContent = message;
+        statusEl.className = "status" + (tone ? " " + tone : "");
+      }
+
+      function renderReport(payload) {
+        reportMetaEl.textContent =
+          payload.startDate + " to " + payload.endDate;
+
+        if (!payload.currencies || payload.currencies.length === 0) {
+          reportBodyEl.innerHTML =
+            '<tr><td class="placeholder" colspan="5">No data.</td></tr>';
+          return;
+        }
+
+        reportBodyEl.innerHTML = payload.currencies
+          .map((row) => {
+            return `
+              <tr>
+                <td>${row.currencyCode}</td>
+                <td class="${row.minRate == null ? "empty" : ""}">${formatNumber(row.minRate)}</td>
+                <td class="${row.maxRate == null ? "empty" : ""}">${formatNumber(row.maxRate)}</td>
+                <td class="${row.avgRate == null ? "empty" : ""}">${formatNumber(row.avgRate)}</td>
+                <td>${row.observations}</td>
+              </tr>
+            `;
+          })
+          .join("");
+      }
+
+      function formatNumber(value) {
+        if (value == null) {
+          return "N/A";
+        }
+        return Number(value).toFixed(6).replace(/\.?0+$/, "");
+      }
+
+      async function requestJSON(url, options = {}) {
+        const response = await fetch(url, options);
+        const payload = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(payload.error || "Request failed");
+        }
+
+        return payload;
+      }
+
+      syncButton.addEventListener("click", async () => {
+        const { startDate, endDate } = values();
+        setBusy(true);
+        setStatus("Running synchronization...");
+
+        try {
+          const params = new URLSearchParams({ startDate });
+          if (endDate) {
+            params.set("endDate", endDate);
+          }
+
+          const payload = await requestJSON("/sync?" + params.toString(), {
+            method: "POST",
+          });
+
+          const errors = payload.errors && payload.errors.length
+            ? " Warnings: " + payload.errors.join("; ")
+            : "";
+
+          setStatus(
+            `Sync completed. Saved ${payload.savedCount}, skipped ${payload.skippedCount}.${errors}`,
+            payload.errors && payload.errors.length ? "error" : "success"
+          );
+        } catch (error) {
+          setStatus(error.message, "error");
+        } finally {
+          setBusy(false);
+        }
+      });
+
+      reportButton.addEventListener("click", async () => {
+        const { startDate, endDate, currencies } = values();
+        setBusy(true);
+        setStatus("Building report...");
+
+        try {
+          const params = new URLSearchParams({
+            startDate,
+            endDate,
+            currencies,
+          });
+
+          const payload = await requestJSON(
+            "/reports/rates?" + params.toString()
+          );
+
+          renderReport(payload);
+          setStatus("Report loaded.", "success");
+        } catch (error) {
+          setStatus(error.message, "error");
+        } finally {
+          setBusy(false);
+        }
+      });
+    </script>
+  </body>
+</html>
