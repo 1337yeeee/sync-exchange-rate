@@ -1,0 +1,6 @@
+.git
+.idea
+app/.env
+app/.DS_Store
+app/bin
+app/.cache
