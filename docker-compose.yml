@@ -23,6 +23,7 @@ services:
     build:
       context: ./app
       dockerfile: Dockerfile
+      target: ${TARGET:-dev}
     container_name: cnb-app
     restart: unless-stopped
     depends_on:
@@ -36,6 +37,12 @@ services:
       POSTGRES_SSLMODE: disable
     ports:
       - "${HTTP_PORT:-8080}:8080"
+    volumes:
+      - ./app:/app
+      - go_mod_cache:/go/pkg/mod
+      - go_build_cache:/root/.cache/go-build
 
 volumes:
   postgres_data:
+  go_mod_cache:
+  go_build_cache:
