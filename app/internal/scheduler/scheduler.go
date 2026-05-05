@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"sync"
@@ -134,7 +135,15 @@ func (s *Scheduler) run() {
 
 		select {
 		case firedAt := <-scheduledTimer.C():
-			_, _ = s.service.SyncDate(context.Background(), toSyncDate(firedAt))
+			syncDate := toSyncDate(firedAt)
+			result, err := s.service.SyncDate(context.Background(), syncDate)
+			if err != nil {
+				log.Printf("scheduled sync failed: date=%s error=%v", syncDate.Format("2006-01-02"), err)
+				continue
+			}
+			if len(result.Errors) > 0 {
+				log.Printf("scheduled sync completed with warnings: date=%s warnings=%s", syncDate.Format("2006-01-02"), strings.Join(result.Errors, "; "))
+			}
 		case <-s.stopCh:
 			scheduledTimer.Stop()
 			return

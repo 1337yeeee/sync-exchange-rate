@@ -2,7 +2,9 @@ package handler
 
 import (
 	"context"
+	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"sync-exchange-rate/internal/delivery/http/dto"
@@ -43,19 +45,36 @@ func (h *SyncHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if request.EndDate == nil {
 		result, syncErr := h.service.SyncDate(r.Context(), request.StartDate)
 		if syncErr != nil {
+			log.Printf("sync date failed: date=%s error=%v", request.StartDate.Format("2006-01-02"), syncErr)
 			writeError(w, http.StatusInternalServerError, syncErr.Error())
 			return
 		}
 
+		logSyncWarnings("sync date", result.Errors)
 		writeJSON(w, http.StatusOK, SyncResponse(result))
 		return
 	}
 
 	result, syncErr := h.service.SyncPeriod(r.Context(), request.StartDate, *request.EndDate)
 	if syncErr != nil {
+		log.Printf(
+			"sync period failed: start_date=%s end_date=%s error=%v",
+			request.StartDate.Format("2006-01-02"),
+			request.EndDate.Format("2006-01-02"),
+			syncErr,
+		)
 		writeError(w, http.StatusInternalServerError, syncErr.Error())
 		return
 	}
 
+	logSyncWarnings("sync period", result.Errors)
 	writeJSON(w, http.StatusOK, SyncResponse(result))
+}
+
+func logSyncWarnings(operation string, warnings []string) {
+	if len(warnings) == 0 {
+		return
+	}
+
+	log.Printf("%s completed with warnings: %s", operation, strings.Join(warnings, "; "))
 }

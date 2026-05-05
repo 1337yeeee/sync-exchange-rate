@@ -78,6 +78,7 @@ func (c *Client) fetch(ctx context.Context, resource string, query url.Values) (
 	if err != nil {
 		return "", fmt.Errorf("build cnb request: %w", err)
 	}
+	req.Header.Set("User-Agent", "Mozilla/5.0")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
