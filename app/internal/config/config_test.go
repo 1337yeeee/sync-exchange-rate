@@ -36,6 +36,10 @@ func TestLoadFromEnvUsesDefaults(t *testing.T) {
 		t.Fatalf("Sync.Schedule = %q, want %q", cfg.Sync.Schedule, defaultSyncSchedule)
 	}
 
+	if cfg.Sync.SchedulerEnabled {
+		t.Fatal("Sync.SchedulerEnabled = true, want false by default")
+	}
+
 	if cfg.CNB.BaseURL != defaultCNBBaseURL {
 		t.Fatalf("CNB.BaseURL = %q, want %q", cfg.CNB.BaseURL, defaultCNBBaseURL)
 	}
@@ -66,6 +70,7 @@ func TestLoadFromEnvReadsEnvironmentValues(t *testing.T) {
 	t.Setenv("POSTGRES_SSLMODE", "require")
 	t.Setenv("POSTGRES_TIMEZONE", "Europe/Prague")
 	t.Setenv("SYNC_SCHEDULE", "*/15 * * * *")
+	t.Setenv("SCHEDULER_ENABLED", "true")
 	t.Setenv("SYNC_CURRENCIES", "usd, eur, usd, gbp")
 	t.Setenv("SYNC_HISTORY_START_DATE", "2024-01-01")
 	t.Setenv("SYNC_HISTORY_END_DATE", "2024-03-31")
@@ -98,6 +103,10 @@ func TestLoadFromEnvReadsEnvironmentValues(t *testing.T) {
 
 	if cfg.Sync.Schedule != "*/15 * * * *" {
 		t.Fatalf("Sync.Schedule = %q, want */15 * * * *", cfg.Sync.Schedule)
+	}
+
+	if !cfg.Sync.SchedulerEnabled {
+		t.Fatal("Sync.SchedulerEnabled = false, want true")
 	}
 
 	assertCurrenciesEqual(t, cfg.Sync.Currencies, []string{"USD", "EUR", "GBP"})

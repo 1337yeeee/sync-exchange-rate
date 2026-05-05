@@ -44,6 +44,7 @@ type PostgresConfig struct {
 
 type SyncConfig struct {
 	Schedule         string
+	SchedulerEnabled bool
 	Currencies       []string
 	HistoryStartDate time.Time
 	HistoryEndDate   time.Time
@@ -64,6 +65,11 @@ func loadFromLookupEnv(lookup func(string) (string, bool)) (Config, error) {
 	}
 
 	postgresPort, err := envInt(lookup, "POSTGRES_PORT", defaultPostgresPort)
+	if err != nil {
+		return Config{}, err
+	}
+
+	schedulerEnabled, err := envBool(lookup, "SCHEDULER_ENABLED", false)
 	if err != nil {
 		return Config{}, err
 	}
@@ -94,6 +100,7 @@ func loadFromLookupEnv(lookup func(string) (string, bool)) (Config, error) {
 		},
 		Sync: SyncConfig{
 			Schedule:         strings.TrimSpace(envString(lookup, "SYNC_SCHEDULE", defaultSyncSchedule)),
+			SchedulerEnabled: schedulerEnabled,
 			Currencies:       parseCurrencies(envString(lookup, "SYNC_CURRENCIES", "")),
 			HistoryStartDate: historyStartDate,
 			HistoryEndDate:   historyEndDate,
@@ -226,6 +233,20 @@ func envInt(lookup func(string) (string, bool), key string, fallback int) (int, 
 	parsed, err := strconv.Atoi(value)
 	if err != nil {
 		return 0, fmt.Errorf("%s must be an integer: %w", key, err)
+	}
+
+	return parsed, nil
+}
+
+func envBool(lookup func(string) (string, bool), key string, fallback bool) (bool, error) {
+	value := strings.TrimSpace(envString(lookup, key, ""))
+	if value == "" {
+		return fallback, nil
+	}
+
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return false, fmt.Errorf("%s must be a boolean: %w", key, err)
 	}
 
 	return parsed, nil

@@ -11,15 +11,11 @@ import (
 	"syscall"
 	"time"
 
-	cnbclient "sync-exchange-rate/internal/client/cnb"
+	"sync-exchange-rate/internal/app"
 	"sync-exchange-rate/internal/config"
 	deliveryhttp "sync-exchange-rate/internal/delivery/http"
 	"sync-exchange-rate/internal/delivery/http/handler"
-	raterepository "sync-exchange-rate/internal/repository/postgres"
 	"sync-exchange-rate/internal/scheduler"
-	reportservice "sync-exchange-rate/internal/service/report"
-	syncservice "sync-exchange-rate/internal/service/sync"
-	"sync-exchange-rate/internal/storage/database"
 )
 
 const shutdownTimeout = 10 * time.Second
@@ -36,40 +32,30 @@ func run() error {
 		return fmt.Errorf("load config: %w", err)
 	}
 
-	db, err := database.NewPostgres(cfg)
+	components, err := app.NewComponents(context.Background(), cfg, app.DBRetryConfig{
+		MaxAttempts: 10,
+		Delay:       2 * time.Second,
+	})
 	if err != nil {
-		return fmt.Errorf("init postgres: %w", err)
+		return fmt.Errorf("init app components: %w", err)
 	}
-
-	if err := database.AutoMigrate(db); err != nil {
-		return fmt.Errorf("migrate database: %w", err)
-	}
-
-	cnb, err := cnbclient.NewClient(cfg.CNB.BaseURL, nil)
-	if err != nil {
-		return fmt.Errorf("init cnb client: %w", err)
-	}
-
-	rateRepository := raterepository.NewRateRepository(db)
-
-	syncSvc, err := syncservice.NewService(cnb, rateRepository, cfg.Sync.Currencies)
-	if err != nil {
-		return fmt.Errorf("init sync service: %w", err)
-	}
-
-	reportSvc, err := reportservice.NewService(rateRepository)
-	if err != nil {
-		return fmt.Errorf("init report service: %w", err)
-	}
+	defer components.Close()
 
 	healthHandler := handler.NewHealthHandler()
-	syncHandler := handler.NewSyncHandler(syncSvc)
-	reportHandler := handler.NewReportHandler(reportSvc)
+	syncHandler := handler.NewSyncHandler(components.SyncService)
+	reportHandler := handler.NewReportHandler(components.ReportService)
 	router := deliveryhttp.NewRouter(healthHandler, syncHandler, reportHandler)
 
-	syncScheduler, err := scheduler.New(syncSvc, cfg.Sync.Schedule)
-	if err != nil {
-		return fmt.Errorf("init scheduler: %w", err)
+	var syncScheduler *scheduler.Scheduler
+	if cfg.Sync.SchedulerEnabled {
+		syncScheduler, err = scheduler.New(components.SyncService, cfg.Sync.Schedule)
+		if err != nil {
+			return fmt.Errorf("init scheduler: %w", err)
+		}
+		log.Printf("embedded scheduler enabled: schedule=%q", cfg.Sync.Schedule)
+		syncScheduler.Start()
+	} else {
+		log.Printf("embedded scheduler disabled")
 	}
 
 	server := &http.Server{
@@ -77,8 +63,6 @@ func run() error {
 		Handler:           router,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
-
-	syncScheduler.Start()
 
 	serverErrCh := make(chan error, 1)
 	go func() {
@@ -97,12 +81,12 @@ func run() error {
 		log.Printf("shutdown signal received")
 	case serveErr, ok := <-serverErrCh:
 		if ok && serveErr != nil {
-			syncScheduler.Stop()
+			stopScheduler(syncScheduler)
 			return fmt.Errorf("run http server: %w", serveErr)
 		}
 	}
 
-	syncScheduler.Stop()
+	stopScheduler(syncScheduler)
 
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
@@ -113,4 +97,10 @@ func run() error {
 
 	log.Printf("server stopped gracefully")
 	return nil
+}
+
+func stopScheduler(s *scheduler.Scheduler) {
+	if s != nil {
+		s.Stop()
+	}
 }

@@ -109,6 +109,7 @@ func (s *Scheduler) Start() {
 	}
 
 	s.started = true
+	log.Printf("scheduler started")
 	go s.run()
 }
 
@@ -136,16 +137,19 @@ func (s *Scheduler) run() {
 		select {
 		case firedAt := <-scheduledTimer.C():
 			syncDate := toSyncDate(firedAt)
+			log.Printf("scheduled sync started: date=%s", syncDate.Format("2006-01-02"))
 			result, err := s.service.SyncDate(context.Background(), syncDate)
 			if err != nil {
 				log.Printf("scheduled sync failed: date=%s error=%v", syncDate.Format("2006-01-02"), err)
 				continue
 			}
+			log.Printf("scheduled sync completed: date=%s saved=%d skipped=%d warnings=%d", syncDate.Format("2006-01-02"), result.SavedCount, result.SkippedCount, len(result.Errors))
 			if len(result.Errors) > 0 {
 				log.Printf("scheduled sync completed with warnings: date=%s warnings=%s", syncDate.Format("2006-01-02"), strings.Join(result.Errors, "; "))
 			}
 		case <-s.stopCh:
 			scheduledTimer.Stop()
+			log.Printf("scheduler stopped")
 			return
 		}
 	}

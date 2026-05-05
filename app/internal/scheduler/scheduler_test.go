@@ -1,7 +1,11 @@
 package scheduler
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"log"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -13,6 +17,7 @@ type fakeSyncService struct {
 	mu    sync.Mutex
 	calls []time.Time
 	ch    chan time.Time
+	err   error
 }
 
 func newFakeSyncService() *fakeSyncService {
@@ -26,7 +31,7 @@ func (s *fakeSyncService) SyncDate(_ context.Context, date time.Time) (syncservi
 	s.calls = append(s.calls, date)
 	s.mu.Unlock()
 	s.ch <- date
-	return syncservice.Result{}, nil
+	return syncservice.Result{}, s.err
 }
 
 type fakeTimer struct {
@@ -77,6 +82,15 @@ func TestNewSchedulerRejectsInvalidSchedule(t *testing.T) {
 	_, err := New(newFakeSyncService(), "bad schedule")
 	if err == nil {
 		t.Fatal("New() error = nil, want validation error")
+	}
+}
+
+func TestNewSchedulerRejectsMissingSyncService(t *testing.T) {
+	t.Parallel()
+
+	_, err := New(nil, "1 0 * * *")
+	if err == nil {
+		t.Fatal("New() error = nil, want sync service validation error")
 	}
 }
 
@@ -148,5 +162,50 @@ func TestSchedulerGracefulStop(t *testing.T) {
 	case <-service.ch:
 		t.Fatal("did not expect sync call after stop")
 	default:
+	}
+}
+
+func TestSchedulerLogsSyncErrors(t *testing.T) {
+	var logs bytes.Buffer
+	previousOutput := log.Writer()
+	log.SetOutput(&logs)
+	t.Cleanup(func() {
+		log.SetOutput(previousOutput)
+	})
+
+	service := newFakeSyncService()
+	service.err = fmt.Errorf("sync failed")
+	timerOne := newFakeTimer()
+	timerTwo := newFakeTimer()
+	timers := []*fakeTimer{timerOne, timerTwo}
+	timerIndex := 0
+
+	scheduler, err := newScheduler(
+		service,
+		"*/1 * * * *",
+		func() time.Time { return time.Date(2024, time.March, 1, 10, 0, 0, 0, time.UTC) },
+		func(duration time.Duration) timer {
+			current := timers[timerIndex]
+			timerIndex++
+			return current
+		},
+	)
+	if err != nil {
+		t.Fatalf("newScheduler() error = %v", err)
+	}
+
+	scheduler.Start()
+	timerOne.channel <- time.Date(2024, time.March, 1, 10, 1, 0, 0, time.UTC)
+
+	select {
+	case <-service.ch:
+	case <-time.After(time.Second):
+		t.Fatal("expected sync service to be called")
+	}
+
+	scheduler.Stop()
+
+	if !strings.Contains(logs.String(), "scheduled sync failed") {
+		t.Fatalf("expected sync failure to be logged, got logs: %s", logs.String())
 	}
 }

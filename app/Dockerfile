@@ -27,6 +27,7 @@ RUN go mod download
 COPY . .
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/server ./cmd/server
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/scheduler ./cmd/scheduler
 
 
 # Production stage
@@ -37,7 +38,8 @@ RUN apk add --no-cache ca-certificates tzdata
 WORKDIR /app
 
 COPY --from=builder /out/server /usr/local/bin/server
+COPY --from=builder /out/scheduler /usr/local/bin/scheduler
 
 EXPOSE 8080
 
-ENTRYPOINT ["/usr/local/bin/server"]
+CMD ["/usr/local/bin/server"]
